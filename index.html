@@ -139,6 +139,7 @@
     let theta  = Math.PI / 4;  // horizontal angle
     let phi    = Math.PI / 3;  // vertical angle (from top)
     let radius = 35;           // zoom distance
+    const MAX_ZOOM = 100;
 
     const PHI_MIN = 0.1;
     const PHI_MAX = Math.PI / 2 - 0.05;
@@ -170,7 +171,7 @@
     // --- SCROLL TO ZOOM ---
     canvas.addEventListener('wheel', e => {
       radius += e.deltaY * 0.05;
-      radius  = Math.max(10, Math.min(80, radius));
+      radius  = Math.max(10, Math.min(MAX_ZOOM, radius));
       e.preventDefault();
     }, { passive: false });
 
