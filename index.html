@@ -25,6 +25,7 @@
     context.configure({ device, format });
 
     const GRID = 32;
+    const splashAmount = 20;
 
     // --- SHADERS ---
     const shader = device.createShaderModule({ code: `
@@ -156,7 +157,7 @@
       // drop a splash at a random position each click
       const x = 8 + Math.floor(Math.random() * 16);
       const z = 8 + Math.floor(Math.random() * 16);
-      sim.splash(x, z, 5);
+      sim.splash(x, z, splashAmount);
     });
 
     // --- RENDER LOOP ---
