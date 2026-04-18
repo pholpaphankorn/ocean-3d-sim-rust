@@ -85,18 +85,22 @@ impl SimState {
         self.v   = new_v;
     }
 
-    pub fn get_vertices(&self) -> Vec<f32> {
-        let mut vertices = Vec::new();
-        let half = GRID as f32 / 2.0;
-        for z in 0..GRID {
-            for x in 0..GRID {
-                vertices.push(x as f32 - half);
-                vertices.push(self.eta[z * GRID + x]);
-                vertices.push(z as f32 - half);
-            }
+pub fn get_vertices(&self) -> Vec<f32> {
+    let mut vertices = Vec::new();
+    let half = GRID as f32 / 2.0;
+
+    // calculate current mean height
+    let mean = self.eta.iter().sum::<f32>() / self.eta.len() as f32;
+
+    for z in 0..GRID {
+        for x in 0..GRID {
+            vertices.push(x as f32 - half);
+            vertices.push(self.eta[z * GRID + x] - mean); // ← subtract mean
+            vertices.push(z as f32 - half);
         }
-        vertices
     }
+    vertices
+}
 
     pub fn get_indices(&self) -> Vec<u32> {
         let mut indices = Vec::new();
