@@ -1,109 +1,127 @@
 use wasm_bindgen::prelude::*;
 
 const GRID: usize = 32;
-const DT: f32 = 0.02; // ← was 0.1, must satisfy: DT * sqrt(G) / DX < 1
+const DT: f32 = 0.1;
 const G: f32 = 9.8;
 const DX: f32 = 1.0;
-const DAMPING: f32 = 0.995; // ← bleeds a tiny bit of energy each step
+const H: f32 = 1.0;          // ← fixed mean depth (linearization point)
+const DAMPING: f32 = 0.995;
 
-// SimState lives on the JS heap, managed via wasm-bindgen
+// We simulate η (deviation from mean), not total height
+// This keeps wave speed = sqrt(G*H) = constant → always stable
+
 #[wasm_bindgen]
 pub struct SimState {
-    h: Vec<f32>,
-    u: Vec<f32>,
-    v: Vec<f32>,
+    eta: Vec<f32>, // surface deviation from mean (+ = crest, - = trough)
+    u:   Vec<f32>, // x-velocity on x-faces
+    v:   Vec<f32>, // z-velocity on z-faces
 }
 
 #[wasm_bindgen]
 impl SimState {
-    // JS calls: const sim = SimState.new()
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         let size = GRID * GRID;
-        let mut h = vec![1.0; size];
+        let mut eta = vec![0.0_f32; size];
 
-        // splash in the center
-        let cx = GRID / 2;
-        let cz = GRID / 2;
-        h[cz * GRID + cx] = 2.0;
-
-        SimState {
-            h,
-            u: vec![0.0; size],
-            v: vec![0.0; size],
+        // Gaussian splash — smooth initial condition, no sharp spikes
+        let cx = (GRID / 2) as f32;
+        let cz = (GRID / 2) as f32;
+        for z in 0..GRID {
+            for x in 0..GRID {
+                let dx = x as f32 - cx;
+                let dz = z as f32 - cz;
+                let r2 = dx*dx + dz*dz;
+                eta[z * GRID + x] = 1.5 * (-r2 / 4.0).exp();
+            }
         }
+
+        SimState { eta, u: vec![0.0; size], v: vec![0.0; size] }
     }
 
-    // JS calls: sim.step() each frame
     pub fn step(&mut self) {
-        let mut new_h = self.h.clone();
+        // LEAPFROG — update η first, then u/v using new η
+        // This is symplectic (energy-conserving) by construction
+
+        // Step 1: update η from velocity divergence
+        let mut new_eta = self.eta.clone();
+        for z in 0..GRID {
+            for x in 0..GRID {
+                let i = z * GRID + x;
+
+                let u_r = if x + 1 < GRID { self.u[z * GRID + (x+1)] } else { 0.0 };
+                let u_l = self.u[i]; // boundary: u[0,z] = 0 always
+                let v_b = if z + 1 < GRID { self.v[(z+1) * GRID + x] } else { 0.0 };
+                let v_t = self.v[i]; // boundary: v[x,0] = 0 always
+
+                new_eta[i] -= DT * H / DX * ((u_r - u_l) + (v_b - v_t));
+            }
+        }
+
+        // Step 2: update u/v from gradient of NEW η
         let mut new_u = self.u.clone();
         let mut new_v = self.v.clone();
 
-        for z in 1..(GRID - 1) {
-            for x in 1..(GRID - 1) {
-                let i = z * GRID + x;
-                let ir = z * GRID + (x + 1);
+        for z in 0..GRID {
+            for x in 1..GRID { // x=0 face stays 0 (wall boundary)
+                let i  = z * GRID + x;
                 let il = z * GRID + (x - 1);
-                let id = (z + 1) * GRID + x;
-                let iu = (z - 1) * GRID + x;
-
-                new_h[i] -= DT
-                    * ((self.u[ir] - self.u[il]) / (2.0 * DX)
-                        + (self.v[id] - self.v[iu]) / (2.0 * DX));
-                new_u[i] -= DT * G * (self.h[ir] - self.h[il]) / (2.0 * DX);
-                new_v[i] -= DT * G * (self.h[id] - self.h[iu]) / (2.0 * DX);
-                // ← damping: bleed a tiny bit of velocity each step
+                new_u[i] -= DT * G / DX * (new_eta[i] - new_eta[il]);
                 new_u[i] *= DAMPING;
+            }
+        }
+
+        for z in 1..GRID { // z=0 face stays 0 (wall boundary)
+            for x in 0..GRID {
+                let i  = z * GRID + x;
+                let iu = (z - 1) * GRID + x;
+                new_v[i] -= DT * G / DX * (new_eta[i] - new_eta[iu]);
                 new_v[i] *= DAMPING;
             }
         }
 
-        self.h = new_h;
-        self.u = new_u;
-        self.v = new_v;
+        self.eta = new_eta;
+        self.u   = new_u;
+        self.v   = new_v;
     }
 
-    // JS calls: sim.get_vertices() to get the 3D mesh
     pub fn get_vertices(&self) -> Vec<f32> {
         let mut vertices = Vec::new();
         let half = GRID as f32 / 2.0;
-
         for z in 0..GRID {
             for x in 0..GRID {
-                let px = x as f32 - half;
-                let pz = z as f32 - half;
-                let py = self.h[z * GRID + x] - 1.0; // subtract rest height
-                vertices.push(px);
-                vertices.push(py);
-                vertices.push(pz);
+                vertices.push(x as f32 - half);
+                vertices.push(self.eta[z * GRID + x]);
+                vertices.push(z as f32 - half);
             }
         }
         vertices
     }
 
-    // JS calls this once to get the triangle indices (never changes)
     pub fn get_indices(&self) -> Vec<u32> {
         let mut indices = Vec::new();
         let g = GRID as u32;
-        for z in 0..(g - 1) {
-            for x in 0..(g - 1) {
+        for z in 0..(g-1) {
+            for x in 0..(g-1) {
                 let i = z * g + x;
-                indices.push(i);
-                indices.push(i + g);
-                indices.push(i + 1);
-                indices.push(i + 1);
-                indices.push(i + g);
-                indices.push(i + g + 1);
+                indices.push(i);     indices.push(i+g); indices.push(i+1);
+                indices.push(i+1);   indices.push(i+g); indices.push(i+g+1);
             }
         }
         indices
     }
 
-    // drop a new splash at any grid position
     pub fn splash(&mut self, x: usize, z: usize, amount: f32) {
-        if x < GRID && z < GRID {
-            self.h[z * GRID + x] += amount;
+        // Gaussian splash instead of single spike
+        let cx = x as f32;
+        let cz = z as f32;
+        for dz in 0..GRID {
+            for dx in 0..GRID {
+                let ddx = dx as f32 - cx;
+                let ddz = dz as f32 - cz;
+                let r2 = ddx*ddx + ddz*ddz;
+                self.eta[dz * GRID + dx] += amount * (-r2 / 3.0).exp();
+            }
         }
     }
 }
