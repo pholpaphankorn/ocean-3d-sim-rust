@@ -5,7 +5,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body style="margin:0; background:#000; overflow:hidden;">
-  <canvas id="ocean" width="800" height="600"></canvas>
+  <canvas id="ocean" width="1920" height="1080"></canvas>
   <div style="position:absolute; top:10px; left:10px; color:#adf; font-family:monospace; font-size:13px;">
     🖱️ drag to orbit &nbsp;|&nbsp; scroll to zoom &nbsp;|&nbsp; click ocean to splash
   </div>
@@ -24,8 +24,9 @@
     const format  = navigator.gpu.getPreferredCanvasFormat();
     context.configure({ device, format });
 
-    const GRID = 32;
+    const GRID = sim.grid_size();
     const splashAmount = 20;
+    const maxZoom = 200
 
     // --- SHADERS ---
     const shader = device.createShaderModule({ code: `
@@ -148,15 +149,15 @@
       lastX=e.clientX; lastY=e.clientY;
     });
     canvas.addEventListener('wheel', e => {
-      radius = Math.max(10, Math.min(80, radius+e.deltaY*0.05));
+      radius = Math.max(10, Math.min(maxZoom, radius+e.deltaY*0.05));
       e.preventDefault();
     }, { passive: false });
 
     // --- CLICK TO SPLASH ---
     canvas.addEventListener('click', () => {
       // drop a splash at a random position each click
-      const x = 8 + Math.floor(Math.random() * 16);
-      const z = 8 + Math.floor(Math.random() * 16);
+      const x = Math.floor(Math.random() * GRID);
+      const z = Math.floor(Math.random() * GRID);
       sim.splash(x, z, splashAmount);
     });
 

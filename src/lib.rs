@@ -1,6 +1,6 @@
 use wasm_bindgen::prelude::*;
 
-const GRID: usize = 32;
+const GRID: usize = 128;
 const DT: f32 = 0.1;
 const G: f32 = 9.8;
 const DX: f32 = 1.0;
@@ -83,6 +83,9 @@ impl SimState {
         self.eta = new_eta;
         self.u   = new_u;
         self.v   = new_v;
+    }
+    pub fn grid_size(&self) -> usize {
+        GRID
     }
 
 pub fn get_vertices(&self) -> Vec<f32> {
