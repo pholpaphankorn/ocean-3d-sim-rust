@@ -1,3 +1,3 @@
 Preview:
 
-![Alt Text](./artifacts/example.gif)
+![Alt Text](./artifacts/preview.gif)
