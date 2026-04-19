@@ -1,35 +1,46 @@
-<!DOCTYPE html>
+<!doctype html>
 
 <html>
-    <head>
-  <link rel="stylesheet" href="style.css">
-</head>
-<body style="margin:0; background:#000; overflow:hidden;">
-  <canvas id="ocean" width="1920" height="1080"></canvas>
-  <div style="position:absolute; top:10px; left:10px; color:#adf; font-family:monospace; font-size:13px;">
-    🖱️ drag to orbit &nbsp;|&nbsp; scroll to zoom &nbsp;|&nbsp; click ocean to splash
-  </div>
+  <head>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body style="margin: 0; background: #000; overflow: hidden">
+    <canvas id="ocean" width="1920" height="1080"></canvas>
+    <div
+      style="
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        color: #adf;
+        font-family: monospace;
+        font-size: 13px;
+      "
+    >
+      🖱️ drag to orbit &nbsp;|&nbsp; scroll to zoom &nbsp;|&nbsp; click ocean to
+      splash
+    </div>
 
-  <script type="module">
-    import init, { SimState } from './pkg/ocean_wasm.js';
-    await init();
+    <script type="module">
+      import init, { SimState } from "./pkg/ocean_wasm.js";
+      await init();
 
-    // create simulation state in Rust
-    const sim = new SimState();
+      // create simulation state in Rust
+      const sim = new SimState();
 
-    const canvas = document.getElementById('ocean');
-    const adapter = await navigator.gpu.requestAdapter();
-    const device  = await adapter.requestDevice();
-    const context = canvas.getContext('webgpu');
-    const format  = navigator.gpu.getPreferredCanvasFormat();
-    context.configure({ device, format });
+      const canvas = document.getElementById("ocean");
+      const adapter = await navigator.gpu.requestAdapter();
+      const device = await adapter.requestDevice();
+      const context = canvas.getContext("webgpu");
+      const format = navigator.gpu.getPreferredCanvasFormat();
+      context.configure({ device, format });
 
-    const GRID = sim.grid_size();
-    const splashAmount = 20;
-    const maxZoom = GRID * 2
+      const GRID = sim.grid_size();
+      const splashAmount = 20;
+      const maxZoom = GRID * 2;
 
-    // --- SHADERS ---
-    const shader = device.createShaderModule({ code: `
+      // --- SHADERS ---
+      const shader = device.createShaderModule({
+        code: `
       struct Uniforms { mvp: mat4x4<f32> }
       @group(0) @binding(0) var<uniform> u: Uniforms;
 
@@ -53,162 +64,220 @@
         let shallow = vec3<f32>(0.0, 0.8, 1.0);
         return vec4<f32>(mix(deep, shallow, t), 1.0);
       }
-    `});
-
-    // --- PIPELINE ---
-    const pipeline = device.createRenderPipeline({
-      layout: 'auto',
-      vertex: {
-        module: shader, entryPoint: 'vs_main',
-        buffers: [{
-          arrayStride: 12,
-          attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }]
-        }]
-      },
-      fragment: { module: shader, entryPoint: 'fs_main', targets: [{ format }] },
-      primitive: { topology: 'triangle-list', cullMode: 'none' },
-      depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' }
-    });
-
-    const depthTexture = device.createTexture({
-      size: [canvas.width, canvas.height],
-      format: 'depth24plus',
-      usage: GPUTextureUsage.RENDER_ATTACHMENT
-    });
-
-    // indices never change — get them once
-    const indexData   = new Uint32Array(sim.get_indices());
-    const indexBuffer = device.createBuffer({
-      size: indexData.byteLength,
-      usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST
-    });
-    device.queue.writeBuffer(indexBuffer, 0, indexData);
-
-    const uniformBuffer = device.createBuffer({
-      size: 64,
-      usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
-    });
-    const bindGroup = device.createBindGroup({
-      layout: pipeline.getBindGroupLayout(0),
-      entries: [{ binding: 0, resource: { buffer: uniformBuffer } }]
-    });
-
-    // --- MATRIX MATH ---
-    function mat4Mul(a, b) {
-      const out = new Float32Array(16);
-      for (let col = 0; col < 4; col++)
-        for (let row = 0; row < 4; row++) {
-          let sum = 0;
-          for (let k = 0; k < 4; k++) sum += a[k*4+row] * b[col*4+k];
-          out[col*4+row] = sum;
-        }
-      return out;
-    }
-
-    function perspective(fovY, aspect, near, far) {
-      const f = 1.0 / Math.tan(fovY / 2);
-      const m = new Float32Array(16);
-      m[0]=f/aspect; m[5]=f;
-      m[10]=far/(near-far); m[11]=-1;
-      m[14]=(near*far)/(near-far);
-      return m;
-    }
-
-    function lookAt(eye, center, up) {
-      let zx=eye[0]-center[0], zy=eye[1]-center[1], zz=eye[2]-center[2];
-      let zl=Math.hypot(zx,zy,zz);
-      zx/=zl; zy/=zl; zz/=zl;
-      let xx=up[1]*zz-up[2]*zy, xy=up[2]*zx-up[0]*zz, xz=up[0]*zy-up[1]*zx;
-      let xl=Math.hypot(xx,xy,xz);
-      xx/=xl; xy/=xl; xz/=xl;
-      const yx=zy*xz-zz*xy, yy=zz*xx-zx*xz, yz=zx*xy-zy*xx;
-      const m=new Float32Array(16);
-      m[0]=xx; m[1]=yx; m[2]=zx; m[3]=0;
-      m[4]=xy; m[5]=yy; m[6]=zy; m[7]=0;
-      m[8]=xz; m[9]=yz; m[10]=zz; m[11]=0;
-      m[12]=-(xx*eye[0]+xy*eye[1]+xz*eye[2]);
-      m[13]=-(yx*eye[0]+yy*eye[1]+yz*eye[2]);
-      m[14]=-(zx*eye[0]+zy*eye[1]+zz*eye[2]);
-      m[15]=1;
-      return m;
-    }
-
-    // --- CAMERA ORBIT ---
-    let theta=Math.PI/4, phi=Math.PI/3, radius=35;
-    const PHI_MIN=0.1, PHI_MAX=Math.PI/2-0.05;
-    let isDragging=false, lastX=0, lastY=0;
-
-    canvas.addEventListener('mousedown', e => {
-      isDragging=true; lastX=e.clientX; lastY=e.clientY;
-    });
-    window.addEventListener('mouseup', () => isDragging=false);
-    window.addEventListener('mousemove', e => {
-      if (!isDragging) return;
-      theta -= (e.clientX-lastX)*0.01;
-      phi    = Math.max(PHI_MIN, Math.min(PHI_MAX, phi-(e.clientY-lastY)*0.01));
-      lastX=e.clientX; lastY=e.clientY;
-    });
-    canvas.addEventListener('wheel', e => {
-      radius = Math.max(10, Math.min(maxZoom, radius+e.deltaY*0.05));
-      e.preventDefault();
-    }, { passive: false });
-
-    // --- CLICK TO SPLASH ---
-    canvas.addEventListener('click', () => {
-      // drop a splash at a random position each click
-      const x = Math.floor(Math.random() * GRID);
-      const z = Math.floor(Math.random() * GRID);
-      sim.splash(x, z, splashAmount);
-    });
-
-    // --- RENDER LOOP ---
-    function frame() {
-      // advance physics (multiple steps per frame = faster waves)
-      sim.step();
-      
-
-      const verts = new Float32Array(sim.get_vertices());
-      const vertBuffer = device.createBuffer({
-        size: verts.byteLength,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST
-      });
-      device.queue.writeBuffer(vertBuffer, 0, verts);
-
-      const eye = [
-        radius*Math.sin(phi)*Math.sin(theta),
-        radius*Math.cos(phi),
-        radius*Math.sin(phi)*Math.cos(theta)
-      ];
-      const proj = perspective(Math.PI/4, canvas.width/canvas.height, 0.1, 1000);
-      const view = lookAt(eye, [0,0,0], [0,1,0]);
-      device.queue.writeBuffer(uniformBuffer, 0, mat4Mul(proj, view));
-
-      const encoder = device.createCommandEncoder();
-      const pass = encoder.beginRenderPass({
-        colorAttachments: [{
-          view: context.getCurrentTexture().createView(),
-          clearValue: { r:0.05, g:0.1, b:0.2, a:1 },
-          loadOp: 'clear', storeOp: 'store'
-        }],
-        depthStencilAttachment: {
-          view: depthTexture.createView(),
-          depthClearValue: 1.0,
-          depthLoadOp: 'clear', depthStoreOp: 'store'
-        }
+    `,
       });
 
-      pass.setPipeline(pipeline);
-      pass.setBindGroup(0, bindGroup);
-      pass.setVertexBuffer(0, vertBuffer);
-      pass.setIndexBuffer(indexBuffer, 'uint32');
-      pass.drawIndexed(indexData.length);
-      pass.end();
+      // --- PIPELINE ---
+      const pipeline = device.createRenderPipeline({
+        layout: "auto",
+        vertex: {
+          module: shader,
+          entryPoint: "vs_main",
+          buffers: [
+            {
+              arrayStride: 12,
+              attributes: [
+                { shaderLocation: 0, offset: 0, format: "float32x3" },
+              ],
+            },
+          ],
+        },
+        fragment: {
+          module: shader,
+          entryPoint: "fs_main",
+          targets: [{ format }],
+        },
+        primitive: { topology: "triangle-list", cullMode: "none" },
+        depthStencil: {
+          format: "depth24plus",
+          depthWriteEnabled: true,
+          depthCompare: "less",
+        },
+      });
 
-      device.queue.submit([encoder.finish()]);
-      requestAnimationFrame(frame);
-    }
+      const depthTexture = device.createTexture({
+        size: [canvas.width, canvas.height],
+        format: "depth24plus",
+        usage: GPUTextureUsage.RENDER_ATTACHMENT,
+      });
 
-    frame();
-  </script>
-</body>
+      // indices never change — get them once
+      const indexData = new Uint32Array(sim.get_indices());
+      const indexBuffer = device.createBuffer({
+        size: indexData.byteLength,
+        usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+      });
+      device.queue.writeBuffer(indexBuffer, 0, indexData);
+
+      const uniformBuffer = device.createBuffer({
+        size: 64,
+        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+      });
+      const bindGroup = device.createBindGroup({
+        layout: pipeline.getBindGroupLayout(0),
+        entries: [{ binding: 0, resource: { buffer: uniformBuffer } }],
+      });
+
+      // --- MATRIX MATH ---
+      function mat4Mul(a, b) {
+        const out = new Float32Array(16);
+        for (let col = 0; col < 4; col++)
+          for (let row = 0; row < 4; row++) {
+            let sum = 0;
+            for (let k = 0; k < 4; k++) sum += a[k * 4 + row] * b[col * 4 + k];
+            out[col * 4 + row] = sum;
+          }
+        return out;
+      }
+
+      function perspective(fovY, aspect, near, far) {
+        const f = 1.0 / Math.tan(fovY / 2);
+        const m = new Float32Array(16);
+        m[0] = f / aspect;
+        m[5] = f;
+        m[10] = far / (near - far);
+        m[11] = -1;
+        m[14] = (near * far) / (near - far);
+        return m;
+      }
+
+      function lookAt(eye, center, up) {
+        let zx = eye[0] - center[0],
+          zy = eye[1] - center[1],
+          zz = eye[2] - center[2];
+        let zl = Math.hypot(zx, zy, zz);
+        zx /= zl;
+        zy /= zl;
+        zz /= zl;
+        let xx = up[1] * zz - up[2] * zy,
+          xy = up[2] * zx - up[0] * zz,
+          xz = up[0] * zy - up[1] * zx;
+        let xl = Math.hypot(xx, xy, xz);
+        xx /= xl;
+        xy /= xl;
+        xz /= xl;
+        const yx = zy * xz - zz * xy,
+          yy = zz * xx - zx * xz,
+          yz = zx * xy - zy * xx;
+        const m = new Float32Array(16);
+        m[0] = xx;
+        m[1] = yx;
+        m[2] = zx;
+        m[3] = 0;
+        m[4] = xy;
+        m[5] = yy;
+        m[6] = zy;
+        m[7] = 0;
+        m[8] = xz;
+        m[9] = yz;
+        m[10] = zz;
+        m[11] = 0;
+        m[12] = -(xx * eye[0] + xy * eye[1] + xz * eye[2]);
+        m[13] = -(yx * eye[0] + yy * eye[1] + yz * eye[2]);
+        m[14] = -(zx * eye[0] + zy * eye[1] + zz * eye[2]);
+        m[15] = 1;
+        return m;
+      }
+
+      // --- CAMERA ORBIT ---
+      let theta = Math.PI / 4,
+        phi = Math.PI / 3,
+        radius = 35;
+      const PHI_MIN = 0.1,
+        PHI_MAX = Math.PI / 2 - 0.05;
+      let isDragging = false,
+        lastX = 0,
+        lastY = 0;
+
+      canvas.addEventListener("mousedown", (e) => {
+        isDragging = true;
+        lastX = e.clientX;
+        lastY = e.clientY;
+      });
+      window.addEventListener("mouseup", () => (isDragging = false));
+      window.addEventListener("mousemove", (e) => {
+        if (!isDragging) return;
+        theta -= (e.clientX - lastX) * 0.01;
+        phi = Math.max(
+          PHI_MIN,
+          Math.min(PHI_MAX, phi - (e.clientY - lastY) * 0.01),
+        );
+        lastX = e.clientX;
+        lastY = e.clientY;
+      });
+      canvas.addEventListener(
+        "wheel",
+        (e) => {
+          radius = Math.max(10, Math.min(maxZoom, radius + e.deltaY * 0.05));
+          e.preventDefault();
+        },
+        { passive: false },
+      );
+
+      // --- CLICK TO SPLASH ---
+      canvas.addEventListener("click", () => {
+        // drop a splash at a random position each click
+        const x = Math.floor(Math.random() * GRID);
+        const z = Math.floor(Math.random() * GRID);
+        sim.splash(x, z, splashAmount);
+      });
+
+      // --- RENDER LOOP ---
+      function frame() {
+        // advance physics (multiple steps per frame = faster waves)
+        sim.step();
+
+        const verts = new Float32Array(sim.get_vertices());
+        const vertBuffer = device.createBuffer({
+          size: verts.byteLength,
+          usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        });
+        device.queue.writeBuffer(vertBuffer, 0, verts);
+
+        const eye = [
+          radius * Math.sin(phi) * Math.sin(theta),
+          radius * Math.cos(phi),
+          radius * Math.sin(phi) * Math.cos(theta),
+        ];
+        const proj = perspective(
+          Math.PI / 4,
+          canvas.width / canvas.height,
+          0.1,
+          1000,
+        );
+        const view = lookAt(eye, [0, 0, 0], [0, 1, 0]);
+        device.queue.writeBuffer(uniformBuffer, 0, mat4Mul(proj, view));
+
+        const encoder = device.createCommandEncoder();
+        const pass = encoder.beginRenderPass({
+          colorAttachments: [
+            {
+              view: context.getCurrentTexture().createView(),
+              clearValue: { r: 0.05, g: 0.1, b: 0.2, a: 1 },
+              loadOp: "clear",
+              storeOp: "store",
+            },
+          ],
+          depthStencilAttachment: {
+            view: depthTexture.createView(),
+            depthClearValue: 1.0,
+            depthLoadOp: "clear",
+            depthStoreOp: "store",
+          },
+        });
+
+        pass.setPipeline(pipeline);
+        pass.setBindGroup(0, bindGroup);
+        pass.setVertexBuffer(0, vertBuffer);
+        pass.setIndexBuffer(indexBuffer, "uint32");
+        pass.drawIndexed(indexData.length);
+        pass.end();
+
+        device.queue.submit([encoder.finish()]);
+        requestAnimationFrame(frame);
+      }
+
+      frame();
+    </script>
+  </body>
 </html>
