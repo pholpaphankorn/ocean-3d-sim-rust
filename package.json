@@ -1,0 +1,30 @@
+{
+  "name": "ocean-3d-sim-rust",
+  "version": "1.0.0",
+  "description": "Preview:",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pholpaphankorn/ocean-3d-sim-rust.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/pholpaphankorn/ocean-3d-sim-rust/issues"
+  },
+  "homepage": "https://github.com/pholpaphankorn/ocean-3d-sim-rust#readme",
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "vite": "^8.0.10",
+    "vite-plugin-wasm": "^3.6.0"
+  }
+}
