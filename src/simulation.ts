@@ -6,24 +6,24 @@ import type { SimState } from '../pkg/ocean_wasm';
 type WaveMode = 'off' | 'swell' | 'rain' | 'pulse';
 
 export class WaveGenerator {
-  private sim:  SimState;
+  private sim: SimState;
   private grid: number;
 
-  private waveTime:  number = 0;
+  private waveTime: number = 0;
   private rainTimer: number = 0;
 
-  private modeSelect:  HTMLSelectElement;
-  private ampSlider:   HTMLInputElement;
-  private freqSlider:  HTMLInputElement;
+  private modeSelect: HTMLSelectElement;
+  private ampSlider: HTMLInputElement;
+  private freqSlider: HTMLInputElement;
   private speedSlider: HTMLInputElement;
 
   constructor(sim: SimState, grid: number) {
-    this.sim  = sim;
+    this.sim = sim;
     this.grid = grid;
 
-    this.modeSelect  = this.getElement<HTMLSelectElement>('waveMode');
-    this.ampSlider   = this.getElement<HTMLInputElement>('amp');
-    this.freqSlider  = this.getElement<HTMLInputElement>('freq');
+    this.modeSelect = this.getElement<HTMLSelectElement>('waveMode');
+    this.ampSlider = this.getElement<HTMLInputElement>('amp');
+    this.freqSlider = this.getElement<HTMLInputElement>('freq');
     this.speedSlider = this.getElement<HTMLInputElement>('speed');
 
     this.registerSliderListeners();
@@ -43,16 +43,16 @@ export class WaveGenerator {
       });
     };
 
-    bind(this.ampSlider,   'ampVal');
-    bind(this.freqSlider,  'freqVal');
+    bind(this.ampSlider, 'ampVal');
+    bind(this.freqSlider, 'freqVal');
     bind(this.speedSlider, 'speedVal');
   }
 
   // Call once per frame before sim.step()
   update(): void {
-    const mode  = this.modeSelect.value as WaveMode;
-    const amp   = parseFloat(this.ampSlider.value);
-    const freq  = parseFloat(this.freqSlider.value);
+    const mode = this.modeSelect.value as WaveMode;
+    const amp = parseFloat(this.ampSlider.value);
+    const freq = parseFloat(this.freqSlider.value);
     const speed = parseFloat(this.speedSlider.value);
 
     switch (mode) {
