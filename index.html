@@ -6,6 +6,7 @@
   </head>
   <body style="margin: 0; background: #000; overflow: hidden">
     <canvas id="ocean" width="1920" height="1080"></canvas>
+
     <div
       style="
         position: absolute;
@@ -16,8 +17,49 @@
         font-size: 13px;
       "
     >
-      🖱️ drag to orbit &nbsp;|&nbsp; scroll to zoom &nbsp;|&nbsp; click ocean to
-      splash
+      🖱️ drag to orbit &nbsp;|&nbsp; scroll to zoom &nbsp;|&nbsp; click ocean to splash
+    </div>
+
+    <!-- Wave Generator Controls -->
+    <div id="controls" style="
+      position: absolute;
+      top: 40px;
+      left: 10px;
+      color: #adf;
+      font-family: monospace;
+      font-size: 12px;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 8px;
+      min-width: 220px;
+    ">
+      <div style="margin-bottom: 6px; font-size: 13px;">🌊 Wave Generator</div>
+      <hr style="border-color: #336; margin: 4px 0 8px 0"/>
+
+      <div style="margin: 4px 0">
+        <label>Mode:</label><br/>
+        <select id="waveMode" style="background:#113; color:#adf; border:1px solid #336; width:100%; margin-top:2px; padding:2px;">
+          <option value="off">Off</option>
+          <option value="swell" selected>Swell (edge)</option>
+          <option value="rain">Rain (random)</option>
+          <option value="pulse">Pulse (center)</option>
+        </select>
+      </div>
+
+      <div style="margin: 8px 0">
+        <label>Amplitude: <span id="ampVal">0.5</span></label><br/>
+        <input id="amp" type="range" min="0.1" max="20.0" step="0.1" value="0.5" style="width:100%"/>
+      </div>
+
+      <div style="margin: 8px 0">
+        <label>Frequency: <span id="freqVal">0.4</span></label><br/>
+        <input id="freq" type="range" min="0.1" max="20.0" step="0.1" value="0.4" style="width:100%"/>
+      </div>
+
+      <div style="margin: 8px 0">
+        <label>Speed: <span id="speedVal">1.0</span></label><br/>
+        <input id="speed" type="range" min="0.1" max="20.0" step="0.1" value="1.0" style="width:100%"/>
+      </div>
     </div>
 
     <script type="module">
@@ -216,15 +258,66 @@
 
       // --- CLICK TO SPLASH ---
       canvas.addEventListener("click", () => {
-        // drop a splash at a random position each click
+        if (isDragging) return;
         const x = Math.floor(Math.random() * GRID);
         const z = Math.floor(Math.random() * GRID);
         sim.splash(x, z, splashAmount);
       });
 
+      // --- CONTROLS ---
+      const ampSlider   = document.getElementById("amp");
+      const freqSlider  = document.getElementById("freq");
+      const speedSlider = document.getElementById("speed");
+      const modeSelect  = document.getElementById("waveMode");
+
+      ampSlider.addEventListener("input",   () => document.getElementById("ampVal").textContent   = ampSlider.value);
+      freqSlider.addEventListener("input",  () => document.getElementById("freqVal").textContent  = freqSlider.value);
+      speedSlider.addEventListener("input", () => document.getElementById("speedVal").textContent = speedSlider.value);
+
+      // --- WAVE GENERATOR ---
+      let waveTime = 0;
+      let rainTimer = 0;
+
+      function generateWaves() {
+        const mode  = modeSelect.value;
+        const amp   = parseFloat(ampSlider.value);
+        const freq  = parseFloat(freqSlider.value);
+        const speed = parseFloat(speedSlider.value);
+
+        if (mode === "swell") {
+          // Sine pattern along the top edge → rolls across the ocean
+          for (let x = 0; x < GRID; x++) {
+            const wave = amp * Math.sin(freq * x + speed * waveTime);
+            sim.splash(x, 0, wave * 0.05);
+          }
+
+        } else if (mode === "rain") {
+          // Random splash at random interval controlled by speed
+          rainTimer += speed * 0.05;
+          if (rainTimer >= 1.0) {
+            rainTimer = 0;
+            const rx = Math.floor(Math.random() * GRID);
+            const rz = Math.floor(Math.random() * GRID);
+            sim.splash(rx, rz, amp * 0.5);
+          }
+
+        } else if (mode === "pulse") {
+          // Periodic burst from center
+          const cx = Math.floor(GRID / 2);
+          const cz = Math.floor(GRID / 2);
+          const pulse = amp * Math.max(0, Math.sin(speed * waveTime));
+          if (pulse > 0.01) {
+            sim.splash(cx, cz, pulse * 0.03);
+          }
+        }
+        // mode === "off" → do nothing
+
+        waveTime += 0.016;
+      }
+
       // --- RENDER LOOP ---
       function frame() {
-        // advance physics (multiple steps per frame = faster waves)
+        generateWaves(); // ← runs every frame before physics
         sim.step();
 
         const verts = new Float32Array(sim.get_vertices());
