@@ -9,7 +9,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "repository": {
     "type": "git",
@@ -23,6 +25,7 @@
   },
   "homepage": "https://github.com/pholpaphankorn/ocean-3d-sim-rust#readme",
   "devDependencies": {
+    "prettier": "^3.8.3",
     "typescript": "^6.0.3",
     "vite": "^8.0.10",
     "vite-plugin-wasm": "^3.6.0"
