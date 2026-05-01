@@ -1,5 +1,5 @@
 {
-  "name": "ocean-3d-sim-rust",
+  "name": "rust-ocean",
   "version": "1.0.0",
   "description": "Preview:",
   "main": "index.js",
@@ -15,15 +15,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pholpaphankorn/ocean-3d-sim-rust.git"
+    "url": "git+https://github.com/pholpaphankorn/rust-ocean.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/pholpaphankorn/ocean-3d-sim-rust/issues"
+    "url": "https://github.com/pholpaphankorn/rust-ocean/issues"
   },
-  "homepage": "https://github.com/pholpaphankorn/ocean-3d-sim-rust#readme",
+  "homepage": "https://github.com/pholpaphankorn/rust-ocean#readme",
   "devDependencies": {
     "prettier": "^3.8.3",
     "typescript": "^6.0.3",
