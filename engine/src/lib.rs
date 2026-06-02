@@ -1,8 +1,10 @@
 use wasm_bindgen::prelude::*;
 
+pub mod dolphin;
 pub mod physics;
 pub mod waves;
 
+use dolphin::Dolphin;
 use physics::{FluidGrid, GRID};
 use waves::{gerstner_stack, WAVE_SCALE};
 
@@ -10,6 +12,7 @@ use waves::{gerstner_stack, WAVE_SCALE};
 pub struct SimState {
     grid: FluidGrid,
     time: f32,
+    dolphin: Dolphin,
 }
 
 #[wasm_bindgen]
@@ -19,11 +22,29 @@ impl SimState {
         SimState {
             grid: FluidGrid::new(),
             time: 0.0,
+            dolphin: Dolphin::new(),
         }
     }
 
     pub fn step(&mut self) {
+        // 1. Advance fluid physics
         self.grid.compute_step(self.time);
+
+        // 2. Map dolphin's world position to fluid grid coordinates
+        // Your grid is centered, so we offset by half the grid size (64.0)
+        let grid_x = (self.dolphin.x + 64.0) as usize;
+        let grid_z = (self.dolphin.z + 64.0) as usize;
+
+        // Safety boundary check to prevent out-of-bounds panics on the grid vector
+        if grid_x < GRID && grid_z < GRID {
+            let current_eta = self.grid.eta[grid_z * GRID + grid_x];
+
+            // 3. Update dolphin kinematics against the localized water height
+            // Using `self.dolphin` points cleanly to the value on your struct
+            if let Some((sx, sz, force)) = self.dolphin.update(0.1, current_eta) {
+                self.grid.add_splash(sx, sz, force);
+            }
+        }
         self.time += 0.1; // Matches internal DT advancement increments cleanly
     }
 
@@ -74,5 +95,9 @@ impl SimState {
 
     pub fn splash(&mut self, x: usize, z: usize, amount: f32) {
         self.grid.add_splash(x, z, amount);
+    }
+
+    pub fn get_dolphin_vertices(&self) -> Vec<f32> {
+        self.dolphin.generate_mesh(self.time)
     }
 }

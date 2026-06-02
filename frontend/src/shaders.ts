@@ -29,3 +29,28 @@ export const oceanShader: string = `
     return vec4<f32>(mix(deep, shallow, t), 1.0);
   }
 `;
+
+export const dolphinShader = `
+  struct Uniforms { mvp: mat4x4<f32> }
+  @group(0) @binding(0) var<uniform> u: Uniforms;
+
+  struct VertexOut {
+    @builtin(position) pos: vec4<f32>,
+    @location(0) intensity: f32,
+  }
+
+  @vertex
+  fn vs_main(@location(0) pos: vec3<f32>, @location(1) intensity: f32) -> VertexOut {
+    var out: VertexOut;
+    out.pos = u.mvp * vec4<f32>(pos, 1.0);
+    out.intensity = intensity;
+    return out;
+  }
+
+  @fragment
+  fn fs_main(in: VertexOut) -> @location(0) vec4<f32> {
+    // Beautiful marine slate grey gradient
+    let base_color = vec3<f32>(0.2, 0.35, 0.45);
+    return vec4<f32>(base_color * in.intensity, 1.0);
+  }
+`;

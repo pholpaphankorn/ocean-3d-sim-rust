@@ -43,10 +43,16 @@ async function main(): Promise<void> {
     // waves.update(); // generate waves from UI controls
     sim.step(); // advance Rust physics
 
-    const verts = new Float32Array(sim.get_vertices());
+    const oceanVerts = new Float32Array(sim.get_vertices());
+    const dolphinVerts = new Float32Array((sim as any).get_dolphin_vertices());
     const mvp = camera.getMVP(canvas);
 
-    renderer.draw(context!, verts, mvp);
+    // Draw Pass 1: Draw your Shallow Water Fluid Mesh
+    renderer.draw(context, oceanVerts, mvp);
+
+    // Draw Pass 2: Draw the procedural creature mesh over the top
+    // (You can pass a secondary pipeline reference or extend renderer.ts to accept a target flag)
+    renderer.drawDolphin(context, dolphinVerts);
 
     requestAnimationFrame(frame);
   }
