@@ -40,7 +40,6 @@ async function main(): Promise<void> {
 
   // --- RENDER LOOP ---
   function frame(): void {
-    // waves.update(); // generate waves from UI controls
     sim.step(); // advance Rust physics
 
     const oceanVerts = new Float32Array(sim.get_vertices());
